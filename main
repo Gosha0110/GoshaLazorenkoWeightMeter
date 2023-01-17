@@ -1,0 +1,303 @@
+package com.example.weightmeter
+
+
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
+import android.provider.MediaStore.Audio.Media
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import androidx.core.view.GestureDetectorCompat
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.MobileAds
+import java.io.File
+import java.io.IOException
+import java.util.*
+import kotlin.Boolean
+import kotlin.Float
+import kotlin.toString
+
+
+class MainActivity : AppCompatActivity() {
+
+    private var userField: EditText? = null
+    private var calculateBtn: Button? = null
+    private var weight: TextView? = null
+    private var height: TextView? = null
+    private var gender: TextView? = null
+
+    private var listWeight = mutableListOf(1, 2, 3)
+    private var listHeight = mutableListOf(1, 2, 3)
+    private var listSwipe = mutableListOf(0, 0, 0)
+
+    private var topWeight: TextView? = null
+    private var topHeight: TextView? = null
+    private var bottomWeight: TextView? = null
+    private var bottomHeight: TextView? = null
+    private var topGender: TextView? = null
+    private var bottomGender: TextView? = null
+
+    private var mainResult: TextView? = null
+
+    private var isNormal = false
+    private var isNormalF = false
+
+    private var body_Mass_Index: TextView? = null
+
+    private var ShareBtn: Button? = null
+
+    lateinit var photoPath: String
+    val REQUEST_TAKE_PHOTO = 1
+
+    private var picture: ImageView? = null
+
+    private lateinit var mAdView : AdView
+
+    private lateinit var detector: GestureDetectorCompat
+
+    @SuppressLint("MissingInflatedId", "SetTextI18n", "InlinedApi")
+    override fun onCreate(savedInstanceState: Bundle?) {
+
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        detector = GestureDetectorCompat(this, DiaryGesturListener())
+
+        userField = findViewById(R.id.personal_N)
+        calculateBtn = findViewById(R.id.b_calculate)
+        weight = findViewById(R.id.number_weight)
+        height = findViewById(R.id.number_height)
+        gender = findViewById(R.id.number_gender)
+        topWeight = findViewById(R.id.top_number_weight)
+        bottomWeight = findViewById(R.id.bottom_number_weight)
+        topHeight = findViewById(R.id.top_number_height)
+        bottomHeight = findViewById(R.id.bottom_number_height)
+        topGender = findViewById(R.id.top_number_gender)
+        bottomGender = findViewById(R.id.bottom_number_gender)
+        mainResult = findViewById(R.id.main_results)
+        body_Mass_Index = findViewById(R.id.mainIndex)
+        ShareBtn = findViewById(R.id.ButtonShare)
+
+        MobileAds.initialize(this) {}
+
+        mAdView = findViewById(R.id.adView)
+        val adRequest = AdRequest.Builder().build()
+        mAdView.loadAd(adRequest)
+
+        ShareBtn?.setOnClickListener {
+            takePicture()
+        }
+
+        calculateBtn?.setOnClickListener {
+           if (gender?.text == "Male") {
+               val result = listHeight.indexOf(1) / listWeight.indexOf(1)
+               if (result > 2.9F && result < 3.1F) {
+                   isNormal = true
+               }
+               else {
+                   this.isNormal = false
+               }
+               result.toInt()
+               body_Mass_Index?.text = result.toString()
+           } else if (gender?.text == "Female") {
+                val resultF = listHeight.indexOf(1) / listWeight.indexOf(1)
+                if (resultF > 3F && resultF < 3.2F) {
+                    isNormalF = true
+                } else {
+                    this.isNormalF = false
+                }
+                resultF.toInt()
+                body_Mass_Index?.text = resultF.toString()
+           }
+           if (isNormal) {
+               mainResult?.text = "HELLO " + userField?.text.toString() + ", YOU ARE NORMAL"
+           } else if (!this.isNormal) {
+               mainResult?.text = "HELLO " + userField?.text.toString() + ", YOU ARE NOT NORMAL"
+           }
+
+            if (isNormalF) {
+                mainResult?.text = "HELLO " + userField?.text.toString() + ", YOU ARE NORMAL"
+            } else if (!this.isNormalF) {
+                mainResult?.text = "HELLO " + userField?.text.toString() + ", YOU ARE NOT NORMAL"
+            }
+        }
+    }
+
+    private fun takePicture() {
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+
+        if (intent.resolveActivity(packageManager) != null) {
+            var photoFile: File? = null
+            try {
+                photoFile = createImageFile()
+            } catch (e: IOException) {}
+            if (photoFile != null) {
+                val photoUri = FileProvider.getUriForFile(
+                    this,
+                    "com.example.android.fileprovider",
+                    photoFile
+                )
+                intent.putExtra(MediaStore.EXTRA_OUTPUT,photoUri)
+                startActivityForResult(intent,REQUEST_TAKE_PHOTO)
+
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_TAKE_PHOTO && requestCode == RESULT_OK) {
+            picture?.rotation = 90f
+            picture?.setImageURI(Uri.parse(photoPath))
+        }
+    }
+
+    private fun createImageFile(): File? {
+        val fileName = "WeightMeterScreen"
+        val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+        val image = File.createTempFile(fileName, ".jpg", storageDir)
+
+        photoPath = image.absolutePath
+
+        return image
+    }
+
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        return if (detector.onTouchEvent(event!!)) {
+            true
+        } else {
+            super.onTouchEvent(event)
+        }
+    }
+
+    inner class DiaryGesturListener: GestureDetector.SimpleOnGestureListener() {
+
+        private val SWIPE_THRESHOLD = 100
+        private val SWIPE_VELOCITY_THRESHOLD = 100
+
+        override fun onFling(
+            downEvent: MotionEvent?,
+            moveEvent: MotionEvent?,
+            velocityX: Float,
+            velocityY: Float
+        ): Boolean {
+            val diffX = moveEvent?.x?.minus(downEvent!!.x) ?:0.0F
+            val diffY = moveEvent?.y?.minus(downEvent!!.y) ?:0.0F
+
+            return if(Math.abs(diffX) > Math.abs(diffY)) {
+                //this left or right swipe
+                if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                    if (diffX > 0) {
+                        // right swipe
+                        this@MainActivity.onRightSwipe()
+
+                    } else {
+                        //left swipe
+                        this@MainActivity.onLeftSwipe()
+                    }
+
+                    if (diffX > 33 && diffX < 45) {
+                        listSwipe.indexOf(0) + 1
+                        listSwipe.indexOf(1) - 1
+                        listSwipe.indexOf(2) - 1
+                    }
+
+                    if (diffX > 145 && diffX < 160) {
+                        listSwipe.indexOf(1) + 1
+                        listSwipe.indexOf(0) - 1
+                        listSwipe.indexOf(2) - 1
+                    }
+
+                    if (diffX > 259 && diffX < 281) {
+                        listSwipe.indexOf(1) - 1
+                        listSwipe.indexOf(0) - 1
+                        listSwipe.indexOf(2) + 1
+                    }
+                    true
+                } else {
+                    super.onFling(downEvent, moveEvent, velocityX, velocityY)
+                }
+            } else ({
+                //this is either a bottom or top swipe
+                if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
+                    if (diffY > 0) {
+                        this@MainActivity.onSwipeTop()
+                    } else {
+                        this@MainActivity.onSwipeBottom()
+                    }
+                } else {
+                    super.onFling(downEvent, moveEvent, velocityX, velocityY)
+                }
+            }) as Boolean
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun onSwipeTop() {
+        if (listSwipe.indexOf(0) == 1) {
+            listWeight.indexOf(0) - 1
+            listWeight.indexOf(1) - 1
+            listWeight.indexOf(2) - 1
+        }
+
+        if (listSwipe.indexOf(0) == 1) {
+            listHeight.indexOf(0) - 1
+            listHeight.indexOf(1) - 1
+            listHeight.indexOf(2) - 1
+        }
+        if (listSwipe.indexOf(2) == 1) {
+            gender?.text = "Female"
+            topGender?.text = "Male"
+        }
+        weight?.text = listWeight.indexOf(0).toString()
+        height?.text = listHeight.indexOf(0).toString()
+        topWeight?.text = listWeight.indexOf(1).toString()
+        bottomWeight?.text = listWeight.indexOf(2).toString()
+        topHeight?.text = listWeight.indexOf(1).toString()
+        bottomHeight?.text = listWeight.indexOf(2).toString()
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun onSwipeBottom() {
+        if (listSwipe.indexOf(0) == 1) {
+            listWeight.indexOf(0) + 1
+            listWeight.indexOf(1) + 1
+            listWeight.indexOf(2) + 1
+        }
+        if (listSwipe.indexOf(1) == 1) {
+            listHeight.indexOf(0) + 1
+            listHeight.indexOf(1) + 1
+            listHeight.indexOf(2) + 1
+        }
+
+        if (listSwipe.indexOf(2) == 1) {
+            gender?.text = "Male"
+            bottomGender?.text = "Female"
+        }
+        weight?.text = listWeight.indexOf(0).toString()
+        height?.text = listHeight.indexOf(0).toString()
+        topWeight?.text = listWeight.indexOf(1).toString()
+        bottomWeight?.text = listWeight.indexOf(2).toString()
+        topHeight?.text = listWeight.indexOf(1).toString()
+        bottomHeight?.text = listWeight.indexOf(2).toString()
+    }
+
+    private fun onRightSwipe() {
+
+    }
+
+    private fun onLeftSwipe() {
+
+    }
+}
